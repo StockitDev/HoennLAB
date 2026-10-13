@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#111827">
+    <meta name="description" content="Explora los Pokémon introducidos en la tercera generación y crea tu equipo ideal.">
+    <title>Hoenn Lab — Laboratorio Pokémon</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="css/styles.css" rel="stylesheet">
+  </head>
+  <body>
+    <header class="site-header">
+      <nav class="navbar container py-3" aria-label="Navegación principal">
+        <a class="brand d-flex align-items-center gap-2 text-decoration-none" href="#" aria-label="Hoenn Lab, inicio">
+          <span class="brand-mark" aria-hidden="true"><span></span></span>
+          <span>HOENN<span class="brand-light">LAB</span></span>
+        </a>
+        <button class="nav-team" id="manage-teams-button" type="button" data-bs-toggle="modal" data-bs-target="#teams-modal">
+          <span class="nav-team-label">MIS EQUIPOS</span>
+          <strong id="nav-team-name">Mi equipo</strong>
+          <span class="team-count" id="nav-team-count">0/6</span>
+          <span class="nav-team-arrow" aria-hidden="true">▾</span>
+        </button>
+      </nav>
+    </header>
+
+    <main>
+      <section class="intro container">
+        <p class="eyebrow">POKÉDEX NACIONAL · 252—386</p>
+        <h1>Pokémon de <span>Hoenn</span></h1>
+        <p>Explora la tercera generación y arma tu propio equipo.</p>
+      </section>
+
+      <section class="team-section" id="equipo">
+        <div class="container">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">PLANIFICADOR</p>
+              <h2 id="active-team-name">Mi equipo</h2>
+            </div>
+            <div class="team-heading-actions">
+              <p class="result-count" id="team-summary">0 de 6 integrantes</p>
+              <button class="evaluate-team-button" id="evaluate-team-button" type="button" disabled>Evaluar equipo</button>
+            </div>
+          </div>
+          <p class="team-intro">Elige hasta seis Pokémon para diseñar tu equipo. Tu selección se guarda en este navegador.</p>
+          <div id="team-grid" class="team-grid"></div>
+          <section class="team-evaluation" aria-labelledby="evaluation-title">
+            <div class="evaluation-heading">
+              <div>
+                <p class="eyebrow">ANÁLISIS DE STATS</p>
+                <h3 id="evaluation-title">Balance del equipo</h3>
+              </div>
+              <div class="team-grade" id="team-grade" aria-live="polite">
+                <strong id="grade-value">—</strong>
+                <span id="grade-label">Arma un equipo para evaluarlo</span>
+              </div>
+            </div>
+            <p class="evaluation-note">Compara el promedio del equipo con la distribución Gen III: prioridad baja apunta al P50, normal al P75 y alta al P90. Las prioridades altas pesan más. Resta 4 puntos por cada tipo repetido (máximo 24). No simula combates.</p>
+            <div class="priority-settings" id="priority-settings">
+              <label class="priority-control">PS
+                <select class="form-select" data-stat-priority="hp" aria-label="Prioridad de PS">
+                  <option value="low">Baja</option><option value="normal" selected>Normal</option><option value="high">Alta</option>
+                </select>
+              </label>
+              <label class="priority-control">Ataque
+                <select class="form-select" data-stat-priority="attack" aria-label="Prioridad de Ataque">
+                  <option value="low">Baja</option><option value="normal" selected>Normal</option><option value="high">Alta</option>
+                </select>
+              </label>
+              <label class="priority-control">Defensa
+                <select class="form-select" data-stat-priority="defense" aria-label="Prioridad de Defensa">
+                  <option value="low">Baja</option><option value="normal" selected>Normal</option><option value="high">Alta</option>
+                </select>
+              </label>
+              <label class="priority-control">At. esp.
+                <select class="form-select" data-stat-priority="special-attack" aria-label="Prioridad de Ataque especial">
+                  <option value="low">Baja</option><option value="normal" selected>Normal</option><option value="high">Alta</option>
+                </select>
+              </label>
+              <label class="priority-control">Def. esp.
+                <select class="form-select" data-stat-priority="special-defense" aria-label="Prioridad de Defensa especial">
+                  <option value="low">Baja</option><option value="normal" selected>Normal</option><option value="high">Alta</option>
+                </select>
+              </label>
+              <label class="priority-control">Velocidad
+                <select class="form-select" data-stat-priority="speed" aria-label="Prioridad de Velocidad">
+                  <option value="low">Baja</option><option value="normal" selected>Normal</option><option value="high">Alta</option>
+                </select>
+              </label>
+            </div>
+            <div id="team-analysis" class="team-analysis" aria-live="polite">
+              <p class="analysis-placeholder">El análisis compara el promedio de tu equipo con los percentiles de las stats de los Pokémon de Gen III.</p>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="container lab-section" id="explorar">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">POKÉDEX</p>
+            <h2>Explora la Pokédex</h2>
+          </div>
+          <p class="result-count" id="result-count" aria-live="polite">Conectando con PokéAPI…</p>
+        </div>
+
+        <div class="filter-panel">
+          <label class="search-field">
+            <span class="visually-hidden">Buscar por nombre o número</span>
+            <input id="search-input" class="form-control" type="search" placeholder="Buscar Pokémon o número…" autocomplete="off">
+          </label>
+          <label class="filter-select">
+            <span class="visually-hidden">Filtrar por tipo</span>
+            <select id="type-filter" class="form-select" disabled>
+              <option value="">Todos los tipos</option>
+            </select>
+          </label>
+          <label class="filter-select role-select">
+            <span class="visually-hidden">Filtrar por rol sugerido</span>
+            <select id="role-filter" class="form-select" disabled>
+              <option value="">Todos los roles</option>
+              <option value="Atacante">Atacante</option>
+              <option value="Defensor">Defensor</option>
+              <option value="Ágil">Ágil</option>
+              <option value="Equilibrado">Equilibrado</option>
+            </select>
+          </label>
+        </div>
+        <div class="load-status" id="load-status" role="status" aria-live="polite">
+          <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+          <span id="load-message">Preparando la Pokédex de Hoenn…</span>
+        </div>
+        <div id="error-message" class="alert alert-warning d-none" role="alert"></div>
+        <div id="pokemon-grid" class="pokemon-grid" aria-live="polite"></div>
+        <div id="empty-state" class="empty-state d-none">
+          <span aria-hidden="true">⌕</span>
+          <h3>No encontramos coincidencias</h3>
+          <p>Prueba con otro nombre o cambia los filtros.</p>
+        </div>
+        <div id="retry-container" class="text-center mt-4 d-none">
+          <button id="retry-button" class="btn btn-outline-light" type="button">Reintentar Pokémon que no cargaron</button>
+        </div>
+      </section>
+
+    </main>
+
+    <footer class="site-footer">
+      <div class="container d-flex flex-wrap justify-content-between gap-2">
+        <span>HOENN LAB <span class="footer-muted">/ PROYECTO WEB API</span></span>
+        <span>Datos de <a href="https://pokeapi.co/" target="_blank" rel="noreferrer">PokéAPI</a> · Proyecto educativo sin afiliación con Nintendo.</span>
+      </div>
+    </footer>
+
+    <div class="modal fade" id="pokemon-modal" tabindex="-1" aria-labelledby="modal-title" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content detail-modal">
+          <div class="modal-header">
+            <p class="eyebrow mb-0" id="modal-number">ARCHIVO DE CAMPO</p>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+          </div>
+          <div class="modal-body" id="modal-body"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal fade" id="teams-modal" tabindex="-1" aria-labelledby="teams-modal-title" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content detail-modal teams-modal">
+          <div class="modal-header">
+            <div>
+              <p class="eyebrow mb-1">PLANIFICADOR</p>
+              <h2 class="modal-title fs-5" id="teams-modal-title">Administrar equipos</h2>
+            </div>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+          </div>
+          <div class="modal-body">
+            <label class="team-manager-label" for="saved-team-select">Equipo activo</label>
+            <select id="saved-team-select" class="form-select team-manager-select"></select>
+            <p class="team-manager-count" id="saved-team-count">1 de 5 equipos</p>
+            <form id="create-team-form" class="team-manager-row">
+              <label class="team-manager-label" for="new-team-name">Crear equipo</label>
+              <div class="team-manager-controls">
+                <input id="new-team-name" class="form-control team-manager-input" type="text" maxlength="24" placeholder="Nombre del equipo" required>
+                <button class="team-manager-button primary" type="submit" id="create-team-button">Crear</button>
+              </div>
+            </form>
+            <form id="rename-team-form" class="team-manager-row">
+              <label class="team-manager-label" for="rename-team-name">Cambiar nombre del equipo activo</label>
+              <div class="team-manager-controls">
+                <input id="rename-team-name" class="form-control team-manager-input" type="text" maxlength="24" required>
+                <button class="team-manager-button" type="submit">Guardar</button>
+              </div>
+            </form>
+            <div class="team-manager-footer">
+              <p class="team-manager-message" id="team-manager-message" role="status" aria-live="polite"></p>
+              <button class="team-manager-button danger" id="delete-team-button" type="button">Borrar equipo</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal fade" id="team-evaluation-modal" tabindex="-1" aria-labelledby="team-evaluation-modal-title" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content detail-modal team-evaluation-modal">
+          <div class="modal-header">
+            <div>
+              <p class="eyebrow mb-1">INFORME DEL EQUIPO</p>
+              <h2 class="modal-title fs-5" id="team-evaluation-modal-title">Datos del equipo</h2>
+            </div>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+          </div>
+          <div class="modal-body">
+            <div id="team-report" class="team-report" aria-live="polite"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="js/app.js"></script>
+  </body>
+</html>
