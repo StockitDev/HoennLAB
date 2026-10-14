@@ -98,6 +98,8 @@ let dexReady = false;
 let teamBuilderRunning = false;
 let coreTeamIds = [null, null, null];
 let activeCoreSlot = 0;
+let pendingTeamReportPokemonId = null;
+let returnToTeamReportAfterDetails = false;
 let generatorFilters = {
   excludeLegendary: false,
   excludeMythical: false
@@ -979,6 +981,7 @@ async function generateTeamFromPriorities(coreMembers = []) {
 }
 
 function renderTeamReport(evaluation) {
+  const teamMembers = teamIds.map(id => pokemonById.get(id)).filter(Boolean);
   const rankedStats = STAT_KEYS.map(stat => ({
     stat,
     average: evaluation.stats[stat].average
@@ -997,9 +1000,33 @@ function renderTeamReport(evaluation) {
       <span>${escapeHTML(TYPE_NAMES[type] || type)}</span>
       <strong>${count}</strong>
     </li>`).join("");
+  const memberCards = teamMembers.map(pokemon => {
+    const image = pokemon.image || `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${pokemon.id}.png`;
+    const stats = STAT_KEYS.map(stat => `
+      <li class="report-member-stat">
+        <span>${STAT_NAMES[stat]}</span>
+        <strong>${pokemon.stats[stat]}</strong>
+      </li>`).join("");
+    return `<article class="report-pokemon-card">
+      <div class="report-pokemon-header">
+        <img src="${escapeHTML(image)}" alt="" loading="lazy">
+        <div class="report-pokemon-heading">
+          <span class="report-pokemon-number">#${String(pokemon.id).padStart(3, "0")}</span>
+          <h4>${escapeHTML(pokemon.name)}</h4>
+          <div class="type-list">${makeTypeBadges(pokemon.types)}</div>
+        </div>
+      </div>
+      <ul class="report-member-stats" aria-label="Estadísticas base de ${escapeHTML(pokemon.name)}">${stats}</ul>
+      <button class="card-button report-details-button" type="button" data-action="view-team-member" data-id="${pokemon.id}">Ver ficha</button>
+    </article>`;
+  }).join("");
 
   document.querySelector("#team-evaluation-modal-title").textContent = `Datos · ${getActiveTeam().name}`;
   elements.teamReport.innerHTML = `<div class="report-columns">
+      <section class="report-section report-team-section">
+        <h3>Integrantes · stats base</h3>
+        <div class="report-pokemon-grid">${memberCards}</div>
+      </section>
       <section class="report-section">
         <h3>Stats · mayor a menor</h3>
         <p class="report-section-note">Promedio de cada stat entre los seis integrantes.</p>
@@ -1074,9 +1101,32 @@ elements.teamAnalysis.addEventListener("click", event => {
   applyRecommendation(Number(button.dataset.removeId), Number(button.dataset.addId));
 });
 elements.teamReport.addEventListener("click", event => {
+  const detailsButton = event.target.closest('button[data-action="view-team-member"]');
+  if (detailsButton) {
+    const pokemon = pokemonById.get(Number(detailsButton.dataset.id));
+    if (!pokemon) return;
+    pendingTeamReportPokemonId = pokemon.id;
+    returnToTeamReportAfterDetails = true;
+    bootstrap.Modal.getInstance(document.querySelector("#team-evaluation-modal"))?.hide();
+    return;
+  }
   const button = event.target.closest('button[data-action="apply-suggestion"]');
   if (!button) return;
   applyRecommendation(Number(button.dataset.removeId), Number(button.dataset.addId));
+});
+document.querySelector("#team-evaluation-modal").addEventListener("hidden.bs.modal", () => {
+  if (pendingTeamReportPokemonId === null) return;
+  const pokemonId = pendingTeamReportPokemonId;
+  pendingTeamReportPokemonId = null;
+  showDetails(pokemonId);
+});
+document.querySelector("#pokemon-modal").addEventListener("hidden.bs.modal", () => {
+  if (!returnToTeamReportAfterDetails) return;
+  returnToTeamReportAfterDetails = false;
+  const members = teamIds.map(id => pokemonById.get(id)).filter(Boolean);
+  if (members.length !== 6) return;
+  renderTeamReport(evaluateTeam(members, getStatBenchmarks()));
+  bootstrap.Modal.getOrCreateInstance(document.querySelector("#team-evaluation-modal")).show();
 });
 elements.savedTeamSelect.addEventListener("change", () => {
   switchActiveTeam(elements.savedTeamSelect.value);
