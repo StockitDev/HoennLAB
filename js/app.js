@@ -319,13 +319,18 @@ function populateTypes() {
 
 function updateCoreTeamButton() {
   const expectedCount = LAST_GEN_III_ID - FIRST_GEN_III_ID + 1;
-  elements.createCoreTeamButton.disabled = !dexReady
-    || pokemonById.size !== expectedCount
-    || teamBuilderRunning;
+  const ready = dexReady && pokemonById.size === expectedCount;
+  elements.createOptimalTeamButton.disabled = !ready || teamBuilderRunning;
+  elements.createOptimalTeamButton.textContent = teamBuilderRunning ? "Buscando equipo…" : "Crear mejor equipo";
+  elements.createCoreTeamButton.disabled = !ready || teamBuilderRunning;
+  elements.createCoreTeamButton.textContent = teamBuilderRunning ? "Buscando equipo…" : "Crear equipo a partir de…";
   elements.generateCoreTeamButton.disabled = !dexReady
     || pokemonById.size !== expectedCount
     || !coreTeamIds.some(Boolean)
     || teamBuilderRunning;
+  elements.generateCoreTeamButton.textContent = teamBuilderRunning
+    ? "Buscando equipo…"
+    : "Crear equipo con la selección";
 }
 
 function renderCoreTeamModal() {
@@ -660,59 +665,66 @@ function getTeamSearchOrder(pokemon, benchmarks) {
   return evaluateTeam([pokemon], benchmarks).statScore;
 }
 
-function findBestTeam(benchmarks, coreMembers = []) {
+async function findBestTeam(benchmarks, coreMembers = []) {
   const coreIds = new Set(coreMembers.map(pokemon => pokemon.id));
   if (coreIds.size !== coreMembers.length || coreMembers.length > 3) {
     throw new Error("El núcleo debe contener hasta tres Pokémon distintos.");
   }
-  const candidates = [...pokemonById.values()].filter(pokemon => !coreIds.has(pokemon.id)).sort((a, b) =>
-    getTeamSearchOrder(b, benchmarks) - getTeamSearchOrder(a, benchmarks)
-    || getBaseStatTotal(b) - getBaseStatTotal(a)
-    || a.id - b.id
+  const candidates = [...pokemonById.values()]
+    .filter(pokemon => !coreIds.has(pokemon.id))
+    .map(pokemon => ({
+      pokemon,
+      statScore: getTeamSearchOrder(pokemon, benchmarks),
+      baseTotal: getBaseStatTotal(pokemon)
+    }));
+  const byStat = [...candidates].sort((a, b) =>
+    b.statScore - a.statScore || b.baseTotal - a.baseTotal || a.pokemon.id - b.pokemon.id
   );
-  const beamWidth = 1000;
-  let beam = [{ members: [...coreMembers], lastIndex: -1, score: 0 }];
+  const byTotal = [...candidates].sort((a, b) =>
+    b.baseTotal - a.baseTotal || b.statScore - a.statScore || a.pokemon.id - b.pokemon.id
+  );
+  const byBlend = [...candidates].sort((a, b) =>
+    (b.statScore + b.baseTotal / 10) - (a.statScore + a.baseTotal / 10)
+    || a.pokemon.id - b.pokemon.id
+  );
 
-  for (let size = coreMembers.length + 1; size <= 6; size += 1) {
-    const nextBeam = [];
-    beam.forEach(state => {
-      for (let index = state.lastIndex + 1; index < candidates.length; index += 1) {
-        const members = [...state.members, candidates[index]];
-        const evaluation = evaluateTeam(members, benchmarks);
-        nextBeam.push({
-          members,
-          lastIndex: index,
-          score: size === 6 ? evaluation.score : evaluation.statScore
-        });
-      }
-    });
-    nextBeam.sort((a, b) => b.score - a.score || a.lastIndex - b.lastIndex);
-    beam = nextBeam.slice(0, beamWidth);
-  }
+  function improveSeed(order) {
+    const members = [...coreMembers];
+    for (const { pokemon } of order) {
+      if (members.length === 6) break;
+      members.push(pokemon);
+    }
 
-  let bestMembers = beam[0].members;
-  let bestScore = evaluateTeam(bestMembers, benchmarks).score;
-  for (let iteration = 0; iteration < 12; iteration += 1) {
-    let improvedMembers = null;
-    let improvedScore = bestScore;
-    const selectedIds = new Set(bestMembers.map(pokemon => pokemon.id));
-    for (let slot = coreMembers.length; slot < bestMembers.length; slot += 1) {
-      for (const candidate of candidates) {
-        if (selectedIds.has(candidate.id)) continue;
-        const replacement = [...bestMembers];
-        replacement[slot] = candidate;
-        const score = evaluateTeam(replacement, benchmarks).score;
-        if (score > improvedScore + 0.0001) {
-          improvedMembers = replacement;
-          improvedScore = score;
+    let score = evaluateTeam(members, benchmarks).score;
+    for (let iteration = 0; iteration < 8; iteration += 1) {
+      let bestReplacement = null;
+      let bestScore = score;
+      const selectedIds = new Set(members.map(pokemon => pokemon.id));
+      for (let slot = coreMembers.length; slot < members.length; slot += 1) {
+        for (const { pokemon: candidate } of candidates) {
+          if (selectedIds.has(candidate.id)) continue;
+          const replacement = [...members];
+          replacement[slot] = candidate;
+          const replacementScore = evaluateTeam(replacement, benchmarks).score;
+          if (replacementScore > bestScore + 0.0001) {
+            bestReplacement = replacement;
+            bestScore = replacementScore;
+          }
         }
       }
+      if (!bestReplacement) break;
+      members.splice(0, members.length, ...bestReplacement);
+      score = bestScore;
     }
-    if (!improvedMembers) break;
-    bestMembers = improvedMembers;
-    bestScore = improvedScore;
+    return { members, score };
   }
-  return { members: bestMembers, score: bestScore };
+
+  let best = improveSeed(byStat);
+  for (const order of [byTotal, byBlend]) {
+    const result = improveSeed(order);
+    if (result.score > best.score) best = result;
+  }
+  return best;
 }
 
 function getBaseStatTotal(pokemon) {
@@ -863,9 +875,6 @@ function applyRecommendation(removeId, addId) {
 }
 
 function renderTeamAnalysis() {
-  elements.createOptimalTeamButton.disabled = !dexReady
-    || pokemonById.size !== LAST_GEN_III_ID - FIRST_GEN_III_ID + 1
-    || teamBuilderRunning;
   updateCoreTeamButton();
   if (!dexReady || pokemonById.size === 0) {
     elements.gradeValue.textContent = "—";
@@ -901,21 +910,20 @@ async function generateTeamFromPriorities(coreMembers = []) {
   const expectedCount = LAST_GEN_III_ID - FIRST_GEN_III_ID + 1;
   if (!dexReady || pokemonById.size !== expectedCount || teamBuilderRunning) return;
 
-  teamBuilderRunning = true;
-  elements.createOptimalTeamButton.textContent = "Buscando equipo…";
-  elements.createCoreTeamButton.textContent = "Buscando equipo…";
-  elements.teamBuilderStatus.textContent = coreMembers.length
-    ? `Buscando el mejor equipo para ${coreMembers.map(pokemon => pokemon.name).join(", ")}…`
-    : "Comparando combinaciones de Pokémon…";
-  renderTeamAnalysis();
-  renderCoreTeamModal();
-  await new Promise(resolve => window.setTimeout(resolve, 0));
-
   const previousIds = [...teamIds];
+  teamBuilderRunning = true;
   try {
+    elements.teamBuilderStatus.textContent = coreMembers.length
+      ? `Buscando el mejor equipo para ${coreMembers.map(pokemon => pokemon.name).join(", ")}…`
+      : "Comparando combinaciones de Pokémon…";
+    updateCoreTeamButton();
+    renderTeamAnalysis();
+    renderCoreTeamModal();
+    await new Promise(resolve => window.setTimeout(resolve, 0));
+
     let result;
     try {
-      result = findBestTeam(getStatBenchmarks(), coreMembers);
+      result = await findBestTeam(getStatBenchmarks(), coreMembers);
     } catch (error) {
       console.error("No se pudo calcular el mejor equipo para estas prioridades.", error);
       showError("No se pudo generar el equipo. El equipo activo no se modificó.");
@@ -937,9 +945,14 @@ async function generateTeamFromPriorities(coreMembers = []) {
     renderTeam();
   } finally {
     teamBuilderRunning = false;
-    elements.createOptimalTeamButton.textContent = "Crear mejor equipo";
-    renderCoreTeamModal();
-    renderTeamAnalysis();
+    updateCoreTeamButton();
+    try {
+      renderCoreTeamModal();
+      renderTeamAnalysis();
+    } catch (error) {
+      console.error("No se pudo actualizar la interfaz después de generar el equipo.", error);
+      showError("El equipo se procesó, pero no se pudo actualizar la interfaz. Recarga la página.");
+    }
   }
 }
 
