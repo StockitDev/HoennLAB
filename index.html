@@ -60,7 +60,7 @@
                 <span id="grade-label">Arma un equipo para evaluarlo</span>
               </div>
             </div>
-            <p class="evaluation-note">Compara el promedio del equipo con la distribución Gen III: prioridad baja apunta al P50, normal al P75 y alta al P90. Las prioridades altas pesan más. Resta 4 puntos por cada tipo repetido (máximo 24). No simula combates.</p>
+            <p class="evaluation-note">Compara el promedio del equipo con la distribución Gen III: prioridad baja apunta al P50, normal al P75 y alta al P90. Las prioridades altas pesan más. La penalización por tipos repetidos disminuye cuando las stats son altas. No simula combates.</p>
             <div class="priority-settings" id="priority-settings">
               <label class="priority-control">PS
                 <select class="form-select" data-stat-priority="hp" aria-label="Prioridad de PS">
@@ -96,6 +96,12 @@
             <div id="team-analysis" class="team-analysis" aria-live="polite">
               <p class="analysis-placeholder">El análisis compara el promedio de tu equipo con los percentiles de las stats de los Pokémon de Gen III.</p>
             </div>
+            <div class="team-builder-actions">
+              <button class="team-manager-button primary" id="create-optimal-team-button" type="button" disabled>Crear mejor equipo</button>
+              <p>Busca una combinación optimizada con tus prioridades y reemplaza el equipo activo.</p>
+            </div>
+            <button class="team-manager-button core-team-open-button" id="create-core-team-button" type="button" disabled>Crear equipo a partir de…</button>
+            <p id="team-builder-status" class="team-builder-status" role="status" aria-live="polite"></p>
           </section>
         </div>
       </section>
@@ -217,6 +223,47 @@
           </div>
           <div class="modal-body">
             <div id="team-report" class="team-report" aria-live="polite"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal fade" id="core-team-modal" tabindex="-1" aria-labelledby="core-team-modal-title" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable core-team-modal-dialog">
+        <div class="modal-content detail-modal core-team-modal">
+          <div class="modal-header">
+            <div>
+              <p class="eyebrow mb-1">EQUIPO A MEDIDA</p>
+              <h2 class="modal-title fs-5" id="core-team-modal-title">Crear equipo a partir de</h2>
+              <p class="core-team-modal-intro">Elige un espacio y selecciona hasta tres Pokémon para mantenerlos en el equipo.</p>
+            </div>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+          </div>
+          <div class="modal-body">
+            <div id="core-team-slots" class="core-team-slots" aria-label="Pokémon elegidos como núcleo"></div>
+            <div class="core-picker-heading">
+              <div>
+                <h3>Elige tu Pokémon</h3>
+                <p id="core-selection-count" role="status" aria-live="polite">Elige un espacio para empezar.</p>
+              </div>
+            </div>
+            <div class="core-picker-filters">
+              <label class="search-field">
+                <span class="visually-hidden">Buscar Pokémon para el equipo</span>
+                <input id="core-pokemon-search" class="form-control" type="search" placeholder="Buscar Pokémon o número…" autocomplete="off">
+              </label>
+              <label class="filter-select">
+                <span class="visually-hidden">Filtrar Pokémon del equipo por tipo</span>
+                <select id="core-type-filter" class="form-select" disabled>
+                  <option value="">Todos los tipos</option>
+                </select>
+              </label>
+            </div>
+            <div id="core-pokemon-grid" class="core-pokemon-grid" aria-live="polite"></div>
+          </div>
+          <div class="modal-footer core-team-modal-footer">
+            <button class="team-manager-button" type="button" data-bs-dismiss="modal">Cancelar</button>
+            <button class="team-manager-button primary" id="generate-core-team-button" type="button" disabled>Crear equipo con la selección</button>
           </div>
         </div>
       </div>

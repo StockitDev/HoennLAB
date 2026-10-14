@@ -70,6 +70,16 @@ const elements = {
   teamAnalysis: document.querySelector("#team-analysis"),
   teamReport: document.querySelector("#team-report"),
   prioritySettings: document.querySelector("#priority-settings"),
+  createOptimalTeamButton: document.querySelector("#create-optimal-team-button"),
+  createCoreTeamButton: document.querySelector("#create-core-team-button"),
+  coreTeamModal: document.querySelector("#core-team-modal"),
+  coreTeamSlots: document.querySelector("#core-team-slots"),
+  corePokemonSearch: document.querySelector("#core-pokemon-search"),
+  coreTypeFilter: document.querySelector("#core-type-filter"),
+  corePokemonGrid: document.querySelector("#core-pokemon-grid"),
+  coreSelectionCount: document.querySelector("#core-selection-count"),
+  generateCoreTeamButton: document.querySelector("#generate-core-team-button"),
+  teamBuilderStatus: document.querySelector("#team-builder-status"),
   modalNumber: document.querySelector("#modal-number"),
   modalBody: document.querySelector("#modal-body")
 };
@@ -82,6 +92,9 @@ let teamIds = getActiveTeam().members;
 let statPriorities = readPriorities();
 let totalLoaded = 0;
 let dexReady = false;
+let teamBuilderRunning = false;
+let coreTeamIds = [null, null, null];
+let activeCoreSlot = 0;
 
 function readCache() {
   try {
@@ -162,9 +175,11 @@ function persistTeam() {
     activeTeam.members = [...teamIds];
     teams.activeId = activeTeamId;
     localStorage.setItem(TEAMS_KEY, JSON.stringify(teams));
+    return true;
   } catch (error) {
     console.error("No se pudieron guardar los equipos en este navegador.", error);
     showError("No se pudieron guardar los equipos en este navegador. Puede que el almacenamiento esté deshabilitado.");
+    return false;
   }
 }
 
@@ -282,15 +297,84 @@ function populateTypes() {
   const selectedValue = elements.typeFilter.value;
   const typeNames = new Set([...pokemonById.values()].flatMap(pokemon => pokemon.types));
   elements.typeFilter.innerHTML = '<option value="">Todos los tipos</option>';
-  [...typeNames]
+  const sortedTypes = [...typeNames]
     .sort((a, b) => (TYPE_NAMES[a] || a).localeCompare(TYPE_NAMES[b] || b, "es"))
-    .forEach(type => {
+  sortedTypes.forEach(type => {
       const option = document.createElement("option");
       option.value = type;
       option.textContent = TYPE_NAMES[type] || type;
       elements.typeFilter.append(option);
     });
+  elements.coreTypeFilter.innerHTML = '<option value="">Todos los tipos</option>';
+  sortedTypes.forEach(type => {
+    const option = document.createElement("option");
+    option.value = type;
+    option.textContent = TYPE_NAMES[type] || type;
+    elements.coreTypeFilter.append(option);
+  });
+  elements.coreTypeFilter.disabled = false;
   elements.typeFilter.value = selectedValue;
+  renderCoreTeamModal();
+}
+
+function updateCoreTeamButton() {
+  const expectedCount = LAST_GEN_III_ID - FIRST_GEN_III_ID + 1;
+  elements.createCoreTeamButton.disabled = !dexReady
+    || pokemonById.size !== expectedCount
+    || teamBuilderRunning;
+  elements.generateCoreTeamButton.disabled = !dexReady
+    || pokemonById.size !== expectedCount
+    || !coreTeamIds.some(Boolean)
+    || teamBuilderRunning;
+}
+
+function renderCoreTeamModal() {
+  const coreIds = coreTeamIds.filter(Boolean);
+  const slots = coreTeamIds.map((id, index) => {
+    const pokemon = id ? pokemonById.get(id) : null;
+    const image = pokemon?.image || (pokemon ? `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${pokemon.id}.png` : "");
+    const activeClass = activeCoreSlot === index ? " active" : "";
+    const filledClass = pokemon ? " filled" : "";
+    const content = pokemon
+      ? `<img src="${escapeHTML(image)}" alt=""><strong>${escapeHTML(pokemon.name)}</strong><span>${makeTypeBadges(pokemon.types)}</span>`
+      : `<span class="core-slot-plus" aria-hidden="true">＋</span><strong>Espacio ${index + 1}</strong><span>Elige un Pokémon</span>`;
+    return `<div class="team-slot core-team-slot${filledClass}${activeClass}">
+      <button class="core-slot-target" type="button" data-core-slot="${index}" aria-label="${pokemon ? `Cambiar ${escapeHTML(pokemon.name)}` : `Elegir Pokémon para el espacio ${index + 1}`}">${content}</button>
+      ${pokemon ? `<button class="remove-member" type="button" data-core-remove="${index}" aria-label="Quitar a ${escapeHTML(pokemon.name)} del núcleo">×</button>` : ""}
+    </div>`;
+  }).join("");
+  elements.coreTeamSlots.innerHTML = slots;
+
+  const query = elements.corePokemonSearch.value.trim().toLocaleLowerCase("es").replace(/^#/, "");
+  const selectedType = elements.coreTypeFilter.value;
+  const selectedIds = new Set(coreIds);
+  const visiblePokemon = [...pokemonById.values()]
+    .filter(pokemon => {
+      const matchesQuery = !query || pokemon.name.includes(query) || String(pokemon.id).includes(query);
+      const matchesType = !selectedType || pokemon.types.includes(selectedType);
+      return matchesQuery && matchesType;
+    })
+    .sort((a, b) => a.id - b.id);
+  elements.corePokemonGrid.innerHTML = visiblePokemon.map(pokemon => {
+    const selectedIndex = coreTeamIds.indexOf(pokemon.id);
+    const selected = selectedIndex !== -1;
+    const image = pokemon.image || `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${pokemon.id}.png`;
+    return `<button class="core-pokemon-option${selected ? " selected" : ""}" type="button" data-core-pokemon="${pokemon.id}" ${selected ? "disabled" : ""}>
+      <img src="${escapeHTML(image)}" alt="" loading="lazy">
+      <span class="core-pokemon-option-info">
+        <span class="core-pokemon-number">#${String(pokemon.id).padStart(3, "0")}</span>
+        <strong>${escapeHTML(pokemon.name)}</strong>
+        <span class="type-list">${makeTypeBadges(pokemon.types)}</span>
+      </span>
+      <span class="core-pokemon-action">${selected ? `Espacio ${selectedIndex + 1}` : "Elegir"}</span>
+    </button>`;
+  }).join("");
+
+  const count = coreIds.length;
+  elements.coreSelectionCount.textContent = count
+    ? `${count} de 3 elegidos · espacio ${activeCoreSlot + 1} seleccionado`
+    : `0 de 3 elegidos · espacio ${activeCoreSlot + 1} seleccionado`;
+  updateCoreTeamButton();
 }
 
 function getRole(pokemon) {
@@ -497,8 +581,21 @@ function getStatBenchmarks() {
 }
 
 function getPercentileRank(distribution, value) {
-  const lower = distribution.filter(candidate => candidate < value).length;
-  const equal = distribution.filter(candidate => candidate === value).length;
+  let low = 0;
+  let high = distribution.length;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if (distribution[middle] < value) low = middle + 1;
+    else high = middle;
+  }
+  const lower = low;
+  high = distribution.length;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if (distribution[middle] <= value) low = middle + 1;
+    else high = middle;
+  }
+  const equal = low - lower;
   return (lower + equal / 2) / distribution.length * 100;
 }
 
@@ -524,6 +621,11 @@ function getTypeBalance(members) {
   };
 }
 
+function getAdjustedTypePenalty(typeBalance, statScore) {
+  const unmetStats = Math.max(0, 1 - statScore / 100);
+  return typeBalance.penalty * unmetStats ** 2;
+}
+
 function evaluateTeam(members, benchmarks) {
   const averages = getTeamAverages(members);
   let weightedAttainment = 0;
@@ -544,12 +646,73 @@ function evaluateTeam(members, benchmarks) {
 
   const statScore = weightedAttainment / totalWeight * 100;
   const typeBalance = getTypeBalance(members);
+  const typePenalty = getAdjustedTypePenalty(typeBalance, statScore);
   return {
-    score: Math.max(0, statScore - typeBalance.penalty),
+    score: Math.max(0, statScore - typePenalty),
     statScore,
+    typePenalty,
     stats,
     typeBalance
   };
+}
+
+function getTeamSearchOrder(pokemon, benchmarks) {
+  return evaluateTeam([pokemon], benchmarks).statScore;
+}
+
+function findBestTeam(benchmarks, coreMembers = []) {
+  const coreIds = new Set(coreMembers.map(pokemon => pokemon.id));
+  if (coreIds.size !== coreMembers.length || coreMembers.length > 3) {
+    throw new Error("El núcleo debe contener hasta tres Pokémon distintos.");
+  }
+  const candidates = [...pokemonById.values()].filter(pokemon => !coreIds.has(pokemon.id)).sort((a, b) =>
+    getTeamSearchOrder(b, benchmarks) - getTeamSearchOrder(a, benchmarks)
+    || getBaseStatTotal(b) - getBaseStatTotal(a)
+    || a.id - b.id
+  );
+  const beamWidth = 1000;
+  let beam = [{ members: [...coreMembers], lastIndex: -1, score: 0 }];
+
+  for (let size = coreMembers.length + 1; size <= 6; size += 1) {
+    const nextBeam = [];
+    beam.forEach(state => {
+      for (let index = state.lastIndex + 1; index < candidates.length; index += 1) {
+        const members = [...state.members, candidates[index]];
+        const evaluation = evaluateTeam(members, benchmarks);
+        nextBeam.push({
+          members,
+          lastIndex: index,
+          score: size === 6 ? evaluation.score : evaluation.statScore
+        });
+      }
+    });
+    nextBeam.sort((a, b) => b.score - a.score || a.lastIndex - b.lastIndex);
+    beam = nextBeam.slice(0, beamWidth);
+  }
+
+  let bestMembers = beam[0].members;
+  let bestScore = evaluateTeam(bestMembers, benchmarks).score;
+  for (let iteration = 0; iteration < 12; iteration += 1) {
+    let improvedMembers = null;
+    let improvedScore = bestScore;
+    const selectedIds = new Set(bestMembers.map(pokemon => pokemon.id));
+    for (let slot = coreMembers.length; slot < bestMembers.length; slot += 1) {
+      for (const candidate of candidates) {
+        if (selectedIds.has(candidate.id)) continue;
+        const replacement = [...bestMembers];
+        replacement[slot] = candidate;
+        const score = evaluateTeam(replacement, benchmarks).score;
+        if (score > improvedScore + 0.0001) {
+          improvedMembers = replacement;
+          improvedScore = score;
+        }
+      }
+    }
+    if (!improvedMembers) break;
+    bestMembers = improvedMembers;
+    bestScore = improvedScore;
+  }
+  return { members: bestMembers, score: bestScore };
 }
 
 function getBaseStatTotal(pokemon) {
@@ -700,6 +863,10 @@ function applyRecommendation(removeId, addId) {
 }
 
 function renderTeamAnalysis() {
+  elements.createOptimalTeamButton.disabled = !dexReady
+    || pokemonById.size !== LAST_GEN_III_ID - FIRST_GEN_III_ID + 1
+    || teamBuilderRunning;
+  updateCoreTeamButton();
   if (!dexReady || pokemonById.size === 0) {
     elements.gradeValue.textContent = "—";
     elements.gradeLabel.textContent = "Cargando datos de la Pokédex";
@@ -721,12 +888,58 @@ function renderTeamAnalysis() {
   const benchmarks = getStatBenchmarks();
   const evaluation = evaluateTeam(members, benchmarks);
   elements.gradeValue.textContent = getGrade(evaluation.score);
-  const typePenalty = evaluation.typeBalance.penalty;
+  const typePenalty = Number(evaluation.typePenalty.toFixed(2));
   const penaltyLabel = typePenalty ? ` · −${typePenalty} por tipos repetidos` : "";
   elements.gradeLabel.textContent = `${Math.round(evaluation.score)} / 100${penaltyLabel} · ${getGradeDescription(evaluation.score)}`;
   elements.teamAnalysis.innerHTML = `${renderStatAnalysis(evaluation.stats)}<p class="recommendation-rule">Las metas se basan en percentiles de stats individuales de Gen III; las sugerencias no aumentan el total base del miembro que sale.</p>${renderRecommendations(members, benchmarks, evaluation)}`;
   if (document.querySelector("#team-evaluation-modal").classList.contains("show")) {
     renderTeamReport(evaluation);
+  }
+}
+
+async function generateTeamFromPriorities(coreMembers = []) {
+  const expectedCount = LAST_GEN_III_ID - FIRST_GEN_III_ID + 1;
+  if (!dexReady || pokemonById.size !== expectedCount || teamBuilderRunning) return;
+
+  teamBuilderRunning = true;
+  elements.createOptimalTeamButton.textContent = "Buscando equipo…";
+  elements.createCoreTeamButton.textContent = "Buscando equipo…";
+  elements.teamBuilderStatus.textContent = coreMembers.length
+    ? `Buscando el mejor equipo para ${coreMembers.map(pokemon => pokemon.name).join(", ")}…`
+    : "Comparando combinaciones de Pokémon…";
+  renderTeamAnalysis();
+  renderCoreTeamModal();
+  await new Promise(resolve => window.setTimeout(resolve, 0));
+
+  const previousIds = [...teamIds];
+  try {
+    let result;
+    try {
+      result = findBestTeam(getStatBenchmarks(), coreMembers);
+    } catch (error) {
+      console.error("No se pudo calcular el mejor equipo para estas prioridades.", error);
+      showError("No se pudo generar el equipo. El equipo activo no se modificó.");
+      elements.teamBuilderStatus.textContent = "No se pudo calcular una combinación. El equipo anterior se conservó.";
+      return;
+    }
+
+    teamIds = result.members.map(pokemon => pokemon.id);
+    if (!persistTeam()) {
+      teamIds = previousIds;
+      getActiveTeam().members = [...previousIds];
+      elements.teamBuilderStatus.textContent = "No se pudo guardar el equipo generado; se conservó el equipo anterior.";
+      renderTeam();
+      return;
+    }
+    hideError();
+    elements.teamBuilderStatus.textContent = `Equipo actualizado · ${result.members.map(pokemon => pokemon.name).join(", ")} · ${result.score.toFixed(1)} puntos.`;
+    renderPokemon();
+    renderTeam();
+  } finally {
+    teamBuilderRunning = false;
+    elements.createOptimalTeamButton.textContent = "Crear mejor equipo";
+    renderCoreTeamModal();
+    renderTeamAnalysis();
   }
 }
 
@@ -858,6 +1071,54 @@ elements.evaluateTeamButton.addEventListener("click", () => {
   if (!dexReady || members.length !== 6) return;
   renderTeamReport(evaluateTeam(members, getStatBenchmarks()));
   bootstrap.Modal.getOrCreateInstance(document.querySelector("#team-evaluation-modal")).show();
+});
+elements.createOptimalTeamButton.addEventListener("click", () => generateTeamFromPriorities());
+elements.createCoreTeamButton.addEventListener("click", () => {
+  if (elements.createCoreTeamButton.disabled) return;
+  activeCoreSlot = coreTeamIds.findIndex(id => !id);
+  if (activeCoreSlot === -1) activeCoreSlot = 0;
+  renderCoreTeamModal();
+  bootstrap.Modal.getOrCreateInstance(elements.coreTeamModal).show();
+});
+elements.coreTeamModal.addEventListener("show.bs.modal", () => {
+  activeCoreSlot = coreTeamIds.findIndex(id => !id);
+  if (activeCoreSlot === -1) activeCoreSlot = 0;
+  renderCoreTeamModal();
+});
+elements.coreTeamSlots.addEventListener("click", event => {
+  const removeButton = event.target.closest("button[data-core-remove]");
+  if (removeButton) {
+    activeCoreSlot = Number(removeButton.dataset.coreRemove);
+    coreTeamIds[activeCoreSlot] = null;
+    renderCoreTeamModal();
+    return;
+  }
+  const slotButton = event.target.closest("button[data-core-slot]");
+  if (!slotButton) return;
+  activeCoreSlot = Number(slotButton.dataset.coreSlot);
+  renderCoreTeamModal();
+});
+elements.corePokemonGrid.addEventListener("click", event => {
+  const pokemonButton = event.target.closest("button[data-core-pokemon]");
+  if (!pokemonButton || pokemonButton.disabled) return;
+  const id = Number(pokemonButton.dataset.corePokemon);
+  if (!pokemonById.has(id) || coreTeamIds.includes(id)) return;
+  coreTeamIds[activeCoreSlot] = id;
+  const nextEmptySlot = coreTeamIds.findIndex(memberId => !memberId);
+  if (nextEmptySlot !== -1) activeCoreSlot = nextEmptySlot;
+  renderCoreTeamModal();
+});
+elements.corePokemonSearch.addEventListener("input", renderCoreTeamModal);
+elements.coreTypeFilter.addEventListener("change", renderCoreTeamModal);
+elements.generateCoreTeamButton.addEventListener("click", () => {
+  const coreMembers = coreTeamIds.filter(Boolean).map(id => pokemonById.get(id));
+  if (coreMembers.some(pokemon => !pokemon)) {
+    elements.teamBuilderStatus.textContent = "No se pudo encontrar uno de los Pokémon elegidos en la Pokédex.";
+    return;
+  }
+  if (!coreMembers.length) return;
+  bootstrap.Modal.getInstance(elements.coreTeamModal)?.hide();
+  generateTeamFromPriorities(coreMembers);
 });
 elements.prioritySettings.querySelectorAll("select[data-stat-priority]").forEach(select => {
   select.value = statPriorities[select.dataset.statPriority];
