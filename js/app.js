@@ -9,6 +9,8 @@ const TEAMS_KEY = "hoenn-lab-teams-v1";
 const PRIORITY_KEY = "hoenn-lab-priorities-v1";
 const MAX_TEAMS = 5;
 const MAX_TEAM_NAME_LENGTH = 24;
+const LEGENDARY_POKEMON_IDS = new Set([377, 378, 379, 380, 381, 382, 383, 384]);
+const MYTHICAL_POKEMON_IDS = new Set([385, 386]);
 const STAT_KEYS = ["hp", "attack", "defense", "special-attack", "special-defense", "speed"];
 const STAT_LABELS = {
   hp: "PS",
@@ -79,6 +81,7 @@ const elements = {
   corePokemonGrid: document.querySelector("#core-pokemon-grid"),
   coreSelectionCount: document.querySelector("#core-selection-count"),
   generateCoreTeamButton: document.querySelector("#generate-core-team-button"),
+  generatorFilterInputs: document.querySelectorAll("[data-generator-filter]"),
   teamBuilderStatus: document.querySelector("#team-builder-status"),
   modalNumber: document.querySelector("#modal-number"),
   modalBody: document.querySelector("#modal-body")
@@ -95,6 +98,10 @@ let dexReady = false;
 let teamBuilderRunning = false;
 let coreTeamIds = [null, null, null];
 let activeCoreSlot = 0;
+let generatorFilters = {
+  excludeLegendary: false,
+  excludeMythical: false
+};
 
 function readCache() {
   try {
@@ -665,18 +672,32 @@ function getTeamSearchOrder(pokemon, benchmarks) {
   return evaluateTeam([pokemon], benchmarks).statScore;
 }
 
-async function findBestTeam(benchmarks, coreMembers = []) {
+function syncGeneratorFilterInputs() {
+  elements.generatorFilterInputs.forEach(input => {
+    input.checked = generatorFilters[input.dataset.generatorFilter];
+  });
+}
+
+function isExcludedByGeneratorFilters(pokemon, filters) {
+  return (filters.excludeLegendary && LEGENDARY_POKEMON_IDS.has(pokemon.id))
+    || (filters.excludeMythical && MYTHICAL_POKEMON_IDS.has(pokemon.id));
+}
+
+async function findBestTeam(benchmarks, coreMembers = [], filters = generatorFilters) {
   const coreIds = new Set(coreMembers.map(pokemon => pokemon.id));
   if (coreIds.size !== coreMembers.length || coreMembers.length > 3) {
     throw new Error("El núcleo debe contener hasta tres Pokémon distintos.");
   }
   const candidates = [...pokemonById.values()]
-    .filter(pokemon => !coreIds.has(pokemon.id))
+    .filter(pokemon => !coreIds.has(pokemon.id) && !isExcludedByGeneratorFilters(pokemon, filters))
     .map(pokemon => ({
       pokemon,
       statScore: getTeamSearchOrder(pokemon, benchmarks),
       baseTotal: getBaseStatTotal(pokemon)
     }));
+  if (coreMembers.length + candidates.length < 6) {
+    throw new Error("Los filtros seleccionados no dejan suficientes Pokémon para completar el equipo.");
+  }
   const byStat = [...candidates].sort((a, b) =>
     b.statScore - a.statScore || b.baseTotal - a.baseTotal || a.pokemon.id - b.pokemon.id
   );
@@ -911,6 +932,7 @@ async function generateTeamFromPriorities(coreMembers = []) {
   if (!dexReady || pokemonById.size !== expectedCount || teamBuilderRunning) return;
 
   const previousIds = [...teamIds];
+  const activeFilters = { ...generatorFilters };
   teamBuilderRunning = true;
   try {
     elements.teamBuilderStatus.textContent = coreMembers.length
@@ -923,7 +945,7 @@ async function generateTeamFromPriorities(coreMembers = []) {
 
     let result;
     try {
-      result = await findBestTeam(getStatBenchmarks(), coreMembers);
+      result = await findBestTeam(getStatBenchmarks(), coreMembers, activeFilters);
     } catch (error) {
       console.error("No se pudo calcular el mejor equipo para estas prioridades.", error);
       showError("No se pudo generar el equipo. El equipo activo no se modificó.");
@@ -1079,6 +1101,14 @@ elements.prioritySettings.addEventListener("change", event => {
   persistPriorities();
   renderTeamAnalysis();
 });
+elements.generatorFilterInputs.forEach(input => {
+  input.addEventListener("change", () => {
+    const filter = input.dataset.generatorFilter;
+    if (!Object.hasOwn(generatorFilters, filter)) return;
+    generatorFilters[filter] = input.checked;
+    syncGeneratorFilterInputs();
+  });
+});
 elements.evaluateTeamButton.addEventListener("click", () => {
   const members = teamIds.map(id => pokemonById.get(id)).filter(Boolean);
   if (!dexReady || members.length !== 6) return;
@@ -1138,6 +1168,7 @@ elements.prioritySettings.querySelectorAll("select[data-stat-priority]").forEach
 });
 elements.retryButton.addEventListener("click", () => loadDex([...failedIds]));
 
+syncGeneratorFilterInputs();
 renderTeam();
 loadDex().catch(error => {
   console.error("No se pudo iniciar la Pokédex.", error);

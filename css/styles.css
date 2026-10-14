@@ -194,6 +194,12 @@ h1, h2, h3, p { margin-top: 0; }
 .team-analysis { margin-top: 1.25rem; }
 .team-builder-actions { display: flex; align-items: center; gap: .85rem; margin-top: 1.1rem; }
 .core-team-open-button { display: block; margin-top: .65rem; }
+.team-builder-filters { display: flex; flex-wrap: wrap; gap: .35rem 1rem; margin-top: .65rem; }
+.team-builder-filters label { display: inline-flex; align-items: center; gap: .4rem; color: var(--muted); font-size: .72rem; cursor: pointer; }
+.team-builder-filters .form-check-input { margin: 0; border-color: var(--line); background-color: var(--panel); accent-color: var(--lime); cursor: pointer; }
+.team-builder-filters .form-check-input:checked { border-color: var(--lime); background-color: var(--lime); }
+.core-team-filters { margin-top: 0; }
+.core-filter-note { margin: .35rem 0 .75rem; color: var(--muted); font-size: .66rem; }
 .team-builder-status { min-height: 1.2em; margin: .5rem 0 0; color: var(--muted); font-size: .72rem; }
 .analysis-placeholder { margin: 0; color: var(--muted); font-size: .83rem; }
 .stat-analysis-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .8rem; }

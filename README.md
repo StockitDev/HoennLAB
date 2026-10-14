@@ -14,7 +14,7 @@ Abre `index.html` en un navegador o sírvelo con una extensión de servidor loca
 - Hasta cinco equipos con nombre; puedes crear, seleccionar, renombrar y borrar equipos. Cada equipo guarda hasta seis integrantes por separado en el navegador.
 - Calificación de balance basada en el promedio de cada stat del equipo y su percentil frente a los Pokémon de tercera generación.
 - Penalización adaptable por tipos repetidos, incluida en la nota y en las recomendaciones de sustitución: disminuye cuando el equipo alcanza mejores niveles de stats.
-- Generador de equipo que busca la mejor combinación de seis Pokémon de Gen III según las prioridades elegidas y reemplaza el equipo activo; permite abrir un selector visual para fijar hasta tres Pokémon como núcleo.
+- Generador de equipo que busca la mejor combinación de seis Pokémon de Gen III según las prioridades elegidas, permite excluir legendarios o singulares y reemplaza el equipo activo; el selector visual permite fijar hasta tres Pokémon como núcleo, que se conservan aunque coincidan con un filtro.
 - Botón del planificador para abrir un informe sin puntaje: ordena las stats de mayor a menor y muestra únicamente los tipos repetidos con su recuento.
 - Prioridades Baja/Normal/Alta configurables (metas P50/P75/P90) y recomendaciones de sustitución que redistribuyen stats sin aumentar el total base del integrante que sale; se pueden aplicar con un botón.
 - Caché local de datos para reducir consultas repetidas a la API.
